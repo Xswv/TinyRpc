@@ -8,7 +8,7 @@
 #include "rocket/common/mutex.h"
 #include "rocket/net/fd_event.h"
 #include "rocket/net/wakeup_fd_event.h"
-//#include "rocket/net/timer.h"
+#include "rocket/net/timer.h"
 
 namespace rocket {
 class EventLoop {
@@ -31,7 +31,7 @@ class EventLoop {
 
   void addTask(std::function<void()> cb, bool is_wake_up = false);
 
-  //void addTimerEvent(TimerEvent::s_ptr event);
+  void addTimerEvent(TimerEvent::s_ptr event);
 
   bool isLooping();
 
@@ -63,7 +63,7 @@ class EventLoop {
   
   Mutex m_mutex;
 
-  //Timer* m_timer {NULL};
+  Timer* m_timer {NULL};
 
   bool m_is_looping {false};
 

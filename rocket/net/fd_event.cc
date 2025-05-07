@@ -36,7 +36,7 @@ std::function<void()> FdEvent::handler(TriggerEvent event) {
 void FdEvent::listen(TriggerEvent event_type, std::function<void()> callback, std::function<void()> error_callback /*= nullptr*/) {
   if (event_type == TriggerEvent::IN_EVENT) {
     m_listen_events.events |= EPOLLIN;
-    m_read_callback = callback; // 绑定对应的函数体
+    m_read_callback = callback;
   } else {
     m_listen_events.events |= EPOLLOUT;
     m_write_callback = callback;

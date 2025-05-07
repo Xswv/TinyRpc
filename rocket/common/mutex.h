@@ -7,15 +7,15 @@
 namespace rocket {
 
 template <class T>
-class ScopeMutext {
+class ScopeMutex {
 
  public:
-  ScopeMutext(T& mutex) : m_mutex(mutex) {
+  ScopeMutex(T& mutex) : m_mutex(mutex) {
     m_mutex.lock();
     m_is_lock = true;
   }
 
-  ~ScopeMutext() {
+  ~ScopeMutex() {
     m_mutex.unlock();
     m_is_lock = false;
   }
@@ -57,6 +57,10 @@ class Mutex {
 
   void unlock() {
     pthread_mutex_unlock(&m_mutex);
+  }
+
+  pthread_mutex_t* getMutex() {
+    return &m_mutex;
   }
 
  private:

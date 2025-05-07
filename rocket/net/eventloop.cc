@@ -5,9 +5,8 @@
 #include "rocket/net/eventloop.h"
 #include "rocket/common/log.h"
 #include "rocket/common/util.h"
-#include "rocket/common/mutex.h"
 
-//把某个 fd 注册进 epoll，如果已经注册过了就更新监听事件；并记录 fd，打印日志，检查错误。
+
 #define ADD_TO_EPOLL() \
     auto it = m_listen_fds.find(event->getFd()); \
     int op = EPOLL_CTL_ADD; \
@@ -20,9 +19,9 @@
     if (rt == -1) { \
       ERRORLOG("failed epoll_ctl when add fd, errno=%d, error=%s", errno, strerror(errno)); \
     } \
-    m_listen_fds.insert(event->getFd()); \  
+    m_listen_fds.insert(event->getFd()); \
     DEBUGLOG("add event success, fd[%d]", event->getFd()) \
-//把这个jd加入到监听的fd集合中
+
 
 #define DELETE_TO_EPOLL() \
     auto it = m_listen_fds.find(event->getFd()); \
@@ -44,15 +43,14 @@ static thread_local EventLoop* t_current_eventloop = NULL;
 static int g_epoll_max_timeout = 10000;
 static int g_epoll_max_events = 10;
 
-EventLoop::EventLoop() {//看当前是否存在这个线程，
+EventLoop::EventLoop() {
   if (t_current_eventloop != NULL) {
     ERRORLOG("failed to create event loop, this thread has created event loop");
     exit(0);
   }
-  //没有的话创建线程，创建epoll实例，返回这个实例的套接字
   m_thread_id = getThreadId();
 
-  m_epoll_fd = epoll_create(10);//size随便给，比零大就可以
+  m_epoll_fd = epoll_create(10);
 
   if (m_epoll_fd == -1) {
     ERRORLOG("failed to create event loop, epoll_create error, error info[%d]", errno);
@@ -72,40 +70,40 @@ EventLoop::~EventLoop() {
     delete m_wakeup_fd_event;
     m_wakeup_fd_event = NULL;
   }
-//   if (m_timer) {
-//     delete m_timer;
-//     m_timer = NULL;
-//   }
+  if (m_timer) {
+    delete m_timer;
+    m_timer = NULL;
+  }
 }
 
 
 void EventLoop::initTimer() {
-//   m_timer = new Timer();
-//   addEpollEvent(m_timer);
+  m_timer = new Timer();
+  addEpollEvent(m_timer);
 }
 
-// void EventLoop::addTimerEvent(TimerEvent::s_ptr event) {
-// //   m_timer->addTimerEvent(event);
-// }
+void EventLoop::addTimerEvent(TimerEvent::s_ptr event) {
+  m_timer->addTimerEvent(event);
+}
 
 void EventLoop::initWakeUpFdEevent() {
-  m_wakeup_fd = eventfd(0, EFD_NONBLOCK);//设置成非阻塞，提供一个可读可写的文件描述符
+  m_wakeup_fd = eventfd(0, EFD_NONBLOCK);
   if (m_wakeup_fd < 0) {
     ERRORLOG("failed to create event loop, eventfd create error, error info[%d]", errno);
     exit(0);
   }
   INFOLOG("wakeup fd = %d", m_wakeup_fd);
 
-  m_wakeup_fd_event = new WakeUpFdEvent(m_wakeup_fd);//创建fdevent 
+  m_wakeup_fd_event = new WakeUpFdEvent(m_wakeup_fd);
 
-  m_wakeup_fd_event->listen(FdEvent::IN_EVENT, [this]() {//注册wakeup的回调并清空buf
+  m_wakeup_fd_event->listen(FdEvent::IN_EVENT, [this]() {
     char buf[8];
     while(read(m_wakeup_fd, buf, 8) != -1 && errno != EAGAIN) {
     }
     DEBUGLOG("read full bytes from wakeup fd[%d]", m_wakeup_fd);
   });
 
-  addEpollEvent(m_wakeup_fd_event);//把wakeup的event添加到队列中
+  addEpollEvent(m_wakeup_fd_event);
 
 }
 
@@ -113,20 +111,18 @@ void EventLoop::initWakeUpFdEevent() {
 void EventLoop::loop() {
   m_is_looping = true;
   while(!m_stop_flag) {
-    ScopeMutext<Mutex> lock(m_mutex); 
+    ScopeMutex<Mutex> lock(m_mutex); 
     std::queue<std::function<void()>> tmp_tasks; 
-    m_pending_tasks.swap(tmp_tasks); //交换tmp 和pend 队列内容，当前线程“独占”原有任务副本 tmp_tasks。其他线程可以继续往m_pending_tasks里面添加任务
+    m_pending_tasks.swap(tmp_tasks); 
     lock.unlock();
 
     while (!tmp_tasks.empty()) {
       std::function<void()> cb = tmp_tasks.front();
       tmp_tasks.pop();
       if (cb) {
-        cb();//执行这个任务
+        cb();
       }
     }
-//xsw：m_pending_tasks 是跨线程添加的任务队列（通过 addTask() 添加）
-// 任务队列处理的是“框架内部/跨线程添加的回调任务”，epoll 处理的是IO事件（读写）
 
     // 如果有定时任务需要执行，那么执行
     // 1. 怎么判断一个定时任务需要执行？ （now() > TimerEvent.arrtive_time）
@@ -194,9 +190,9 @@ void EventLoop::dealWakeup() {
 }
 
 void EventLoop::addEpollEvent(FdEvent* event) {
-  if (isInLoopThread()) {//检查是否在当前eventloop所属线程，epoll 不是线程安全的，所有 epoll 操作都应在 EventLoop 所在线程内进行。
+  if (isInLoopThread()) {
     ADD_TO_EPOLL();
-  } else {//如果不在，那就是跨线程，就封装为任务 
+  } else {
     auto cb = [this, event]() {
       ADD_TO_EPOLL();
     };
@@ -219,7 +215,7 @@ void EventLoop::deleteEpollEvent(FdEvent* event) {
 }
 
 void EventLoop::addTask(std::function<void()> cb, bool is_wake_up /*=false*/) {
-  ScopeMutext<Mutex> lock(m_mutex);
+  ScopeMutex<Mutex> lock(m_mutex);
   m_pending_tasks.push(cb);
   lock.unlock();
 
